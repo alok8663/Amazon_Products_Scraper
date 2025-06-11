@@ -75,7 +75,7 @@ def scrape_from_landing_page(landing_url, max_pages):
                 all_products.append({
                     "Title": title,
                     "Price": price,
-                    "About_This_Item": about,
+                    "About_this_Item": about,
                     "Product_Description": desc
                 })
 
@@ -83,7 +83,12 @@ def scrape_from_landing_page(landing_url, max_pages):
                 driver.switch_to.window(driver.window_handles[0])
 
             try:
-                next_btn = driver.find_element(By.CSS_SELECTOR, "ul.a-pagination li.a-last a")
+                next_btn = driver.find_element(By.CSS_SELECTOR, "span.s-pagination-item.s-pagination-next")
+                is_disabled = next_btn.get_attribute("aria-disabled")
+
+                if is_disabled == "true":
+                    print("Next button is disabled. Reached the last page.")
+                    break
                 driver.execute_script("arguments[0].click();", next_btn)
                 time.sleep(4)
                 page += 1
