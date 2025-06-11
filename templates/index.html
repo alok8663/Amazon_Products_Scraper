@@ -1,12 +1,12 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Amazon Review Scraper</title>
+    <title>Amazon Product Details Scraper</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-    <h1>Amazon Product Review Scraper 📦🔍</h1>
-    <p>Scrape product reviews from Amazon using the product's URL</p>
+    <h1>Amazon Product Details Scraper 📦🔍</h1>
+    <p>Scrape all product details from the Amazon Best Sellers page</p>
 
     {% if error %}
         <p style="color: red;">{{ error }}</p>
@@ -14,7 +14,7 @@
 
     <form method="post">
         <label for="product_url"><strong>Enter Amazon Product URL:</strong> </label><br>
-        <input type="text" id="product_url" name="product_url" placeholder="e.g. https://www.amazon.in/dp/PRODUCT_ASIN" required><br><br>
+        <input type="text" id="product_url" name="product_url"  required><br><br>
 
 
         <input type="submit" value="Start Scraping 🚀">
@@ -23,7 +23,7 @@
     {% if download_ready %}
         <hr>
         <h2>✅ Scraping Completed!</h2>
-        <p>You can now download the JSON file containing the reviews:</p>
+        <p>You can now download the JSON file containing all the product details:</p>
         <a href="{{ url_for('download_file', filename=filename) }}">
             <button style="padding: 10px 20px; font-size: 16px;">⬇️ Download JSON File</button>
         </a>
@@ -33,10 +33,7 @@
     <p><strong>ℹ️ Instructions:</strong></p>
     <ul>
         <li>Enter the product URL.</li>
-        <li>Select the number of pages.</li>
         <li>Click 'Start Scraping' — a Chrome window will open.</li>
-        <li><strong>If login window doesn't appear, once refresh the page.</strong></li>
-        <li>If prompted, log in to your Amazon account manually.</li>
         <li>After scraping completes, click the download button to get your JSON file.</li>
     </ul>
 </body>
