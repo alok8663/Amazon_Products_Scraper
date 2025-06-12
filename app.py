@@ -62,25 +62,89 @@ def scrape_from_landing_page(landing_url, max_pages):
                         driver.get(product_url)
                         time.sleep(random.uniform(3, 6))
 
+                        # Extracting Title of the product
                         try:
                             title = driver.find_element(By.ID, "productTitle").text.strip()
                         except:
                             title = "N/A"
 
+                        # Extracting Price of the product
                         try:
                             price = driver.find_element(By.CSS_SELECTOR, "span.a-price-whole").text.strip()
                         except:
                             price = "N/A"
 
+
+                        # Extracting About this item section
                         try:
-                            about = driver.find_element(By.ID, "feature-bullets").text.strip()
+                            raw_about = driver.find_element(By.ID, "feature-bullets").text.strip()
+                            about_lines = raw_about.splitlines()
+
+                            # Remove "About this item" if it's the first line
+                            if about_lines and "about this item" in about_lines[0].lower():
+                                about_lines.pop(0)
+
+                            # Remove "› See more product details" if it's the last line
+                            if about_lines and "see more product details" in about_lines[-1].lower():
+                                about_lines.pop()
+
+                            about = "\n".join(about_lines).strip()
                         except:
                             about = "N/A"
 
+                        # Extracting Product Description
                         try:
-                            desc = driver.find_element(By.ID, "aplus").text.strip()
-                        except:
-                            desc = "N/A"
+                            aplus_html = ""
+                            cleaned_text = ""
+                            unique_images = []
+                            video_url = "N/A"
+
+                            try:
+                                aplus_element = driver.find_element(By.ID, "aplus")
+                                aplus_html = aplus_element.get_attribute("innerHTML")
+                                text_content = aplus_element.text.strip()
+
+                                # Remove unwanted phrases
+                                cleaned_lines = [
+                                    line for line in text_content.splitlines()
+                                    if line.strip().lower() not in ["product description", "click to play video"]
+                                ]
+                                cleaned_text = "\n".join(cleaned_lines).strip()
+
+                                # Unique image URLs
+                                image_tags = re.findall(r'<img[^>]+src="([^">]+)"', aplus_html)
+                                unique_images = list(dict.fromkeys(image_tags))
+
+                            except:
+                                # Fallback to basic product description
+                                try:
+                                    basic_desc_element = driver.find_element(By.ID, "productDescription")
+                                    cleaned_text = basic_desc_element.text.strip()
+                                except:
+                                    cleaned_text = "N/A"
+
+                            # Video extraction from full page source
+                            full_html = driver.page_source
+                            video_match = re.search(r'<video[^>]*src="([^"]+\.mp4)"', full_html)
+                            video_url = video_match.group(1) if video_match else "N/A"
+
+                            desc = {
+                                "text": cleaned_text if cleaned_text else "N/A",
+                                "images": unique_images,
+                                "video": video_url
+                            }
+
+                        except Exception as e:
+                            print("Could not extract product description:", e)
+                            desc = {
+                                "text": "N/A",
+                                "images": [],
+                                "video": "N/A"
+                            }
+
+
+
+
 
                         all_products.append({
                             "Title": title,
