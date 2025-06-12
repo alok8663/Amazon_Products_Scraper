@@ -123,15 +123,9 @@ def scrape_from_landing_page(landing_url, max_pages):
                                 except:
                                     cleaned_text = "N/A"
 
-                            # Video extraction from full page source
-                            full_html = driver.page_source
-                            video_match = re.search(r'<video[^>]*src="([^"]+\.mp4)"', full_html)
-                            video_url = video_match.group(1) if video_match else "N/A"
-
                             desc = {
                                 "text": cleaned_text if cleaned_text else "N/A",
                                 "images": unique_images,
-                                "video": video_url
                             }
 
                         except Exception as e:
