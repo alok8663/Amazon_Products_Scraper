@@ -89,26 +89,90 @@ def scrape_from_landing_page(landing_url, max_pages):
                                 about_lines.pop()
 
                             about = "\n".join(about_lines).strip()
+
+                            # If still empty after cleaning, try fallback for books
+                            if not about:
+                                raise Exception("Empty after cleaning, try book fallback")
+
                         except:
-                            about = "N/A"
+                            # Fallback for books (like in bookDescription_feature_div)
+                            try:
+                                book_desc_div = driver.find_element(By.ID, "bookDescription_feature_div")
+                                book_span = book_desc_div.find_element(By.TAG_NAME, "span")
+                                about = book_span.text.strip()
+                            except:
+                                about = "N/A"
+
+
+
+                        # Extracting Product Information / Product Details
+                        try:
+                            # Try normal Product Information
+                            product_info_element = driver.find_element(By.ID, "prodDetails")
+                            raw_info = product_info_element.text.strip()
+
+                            lines = raw_info.splitlines()
+                            filtered_lines = [
+                                line for line in lines
+                                if line.strip().lower() not in [
+                                    "product information",
+                                    "feedback",
+                                    "would you like to tell us about a lower price?"
+                                ]
+                            ]
+
+                            product_info = "\n".join(filtered_lines).strip()
+
+                            # If still empty after filtering, trigger fallback
+                            if not product_info:
+                                raise Exception("Empty Product Info — using fallback")
+
+                        except:
+                            # Fallback: use Product Details (for books etc.)
+                            try:
+                                detail_element = driver.find_element(By.ID, "detailBullets_feature_div")
+                                raw_detail = detail_element.text.strip()
+
+                                detail_lines = raw_detail.splitlines()
+                                filtered_detail_lines = [
+                                    line for line in detail_lines
+                                    if line.strip().lower() not in [
+                                        "product details",
+                                        "feedback",
+                                        "would you like to tell us about a lower price?"
+                                    ]
+                                ]
+
+                                product_info = "\n".join(filtered_detail_lines).strip()
+                            except:
+                                product_info = "N/A"
+
+
+
 
                         # Extracting Product Description
                         try:
                             aplus_html = ""
                             cleaned_text = ""
                             unique_images = []
-                            video_url = "N/A"
 
                             try:
                                 aplus_element = driver.find_element(By.ID, "aplus")
                                 aplus_html = aplus_element.get_attribute("innerHTML")
                                 text_content = aplus_element.text.strip()
 
-                                # Remove unwanted phrases
-                                cleaned_lines = [
-                                    line for line in text_content.splitlines()
-                                    if line.strip().lower() not in ["product description", "click to play video"]
-                                ]
+                                # Remove unwanted sections like "From the Brand", "Click to play video"
+                                cleaned_lines = []
+                                skip_section = False
+                                for line in text_content.splitlines():
+                                    lower_line = line.strip().lower()
+                                    if "from the brand" in lower_line or "click to play video" in lower_line:
+                                        skip_section = True
+                                    elif skip_section and lower_line == "":
+                                        skip_section = False
+                                    elif not skip_section and lower_line not in ["product description"]:
+                                        cleaned_lines.append(line.strip())
+
                                 cleaned_text = "\n".join(cleaned_lines).strip()
 
                                 # Unique image URLs
@@ -133,17 +197,14 @@ def scrape_from_landing_page(landing_url, max_pages):
                             desc = {
                                 "text": "N/A",
                                 "images": [],
-                                "video": "N/A"
                             }
-
-
-
 
 
                         all_products.append({
                             "Title": title,
                             "Price": price,
                             "About_this_Item": about,
+                            "Product_Information": product_info,
                             "Product_Description": desc
                         })
 
