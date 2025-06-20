@@ -17,20 +17,31 @@ from datetime import datetime
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-filename = os.path.join(BASE_DIR, "amazon_reviews.json")
+filename = os.path.join(BASE_DIR, "amazon_product_details.json")
 
 def init_driver():
     options = webdriver.ChromeOptions()
-    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36")
+    USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.1 Safari/605.1.15",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+]
+    options.add_argument(f"user-agent={random.choice(USER_AGENTS)}")
     options.add_argument("--start-maximized")
     options.add_argument('--disable-blink-features=AutomationControlled')
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
     options.add_experimental_option('useAutomationExtension', False)
+    options.add_argument("--lang=en-US,en;q=0.9")
 
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
     driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
 
     return driver
+
+
+def clean_amazon_url(url):
+    return url.split('?')[0] if '?ref=' in url or '/ref=' in url else url
+
 
 
 def scrape_from_landing_page(landing_url, max_pages):
@@ -39,6 +50,7 @@ def scrape_from_landing_page(landing_url, max_pages):
 
     try:
         print("Waiting for login if needed...")
+        landing_url = clean_amazon_url(landing_url)
         driver.get(landing_url)
         time.sleep(random.uniform(3, 7))  # wait for login
 
@@ -107,45 +119,100 @@ def scrape_from_landing_page(landing_url, max_pages):
 
                         # Extracting Product Information / Product Details
                         try:
-                            # Try normal Product Information
-                            product_info_element = driver.find_element(By.ID, "prodDetails")
-                            raw_info = product_info_element.text.strip()
+                            product_info = "N/A"  # Default fallback
 
-                            lines = raw_info.splitlines()
-                            filtered_lines = [
-                                line for line in lines
-                                if line.strip().lower() not in [
-                                    "product information",
-                                    "feedback",
-                                    "would you like to tell us about a lower price?"
-                                ]
-                            ]
+                            # Step 1: Slowly scroll down to load all dynamic content
+                            scroll_height = driver.execute_script("return document.body.scrollHeight")
+                            for y in range(0, scroll_height, 300):
+                                driver.execute_script(f"window.scrollTo(0, {y});")
+                                time.sleep(0.3)
 
-                            product_info = "\n".join(filtered_lines).strip()
-
-                            # If still empty after filtering, trigger fallback
-                            if not product_info:
-                                raise Exception("Empty Product Info — using fallback")
-
-                        except:
-                            # Fallback: use Product Details (for books etc.)
+                            # Step 2: Expand all expander buttons (reliable span click)
                             try:
-                                detail_element = driver.find_element(By.ID, "detailBullets_feature_div")
-                                raw_detail = detail_element.text.strip()
+                                expander_spans = driver.find_elements(
+                                    By.XPATH, "//div[contains(@class, 'a-expander-header') and contains(@class, 'a-declarative')]/span"
+                                )
+                                for span in expander_spans:
+                                    try:
+                                        if span.is_displayed():
+                                            driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", span)
+                                            time.sleep(0.5)
+                                            driver.execute_script("arguments[0].click();", span)
+                                            time.sleep(1)
+                                            print("[+] Clicked expander span")
+                                    except Exception as e:
+                                        print(f"[!] Expander click error: {e}")
+                                        continue
+                            except Exception as e:
+                                print(f"[!] Expander span fetch error: {e}")
 
-                                detail_lines = raw_detail.splitlines()
-                                filtered_detail_lines = [
-                                    line for line in detail_lines
-                                    if line.strip().lower() not in [
-                                        "product details",
-                                        "feedback",
-                                        "would you like to tell us about a lower price?"
+                            # Step 3: Extract key-value table pairs
+                            try:
+                                table_rows = driver.find_elements(By.XPATH, "//table[contains(@class, 'a-keyvalue')]//tr")
+
+                                pairs = []
+                                for row in table_rows:
+                                    try:
+                                        key = row.find_element(By.XPATH, ".//th").text.strip()
+                                        value = row.find_element(By.XPATH, ".//td").text.strip()
+                                        if key and value:
+                                            pairs.append(f"{key}: {value}")
+                                    except Exception as e:
+                                        print(f"[Row Parse Error] {e}")
+                                        continue
+
+                                if pairs:
+                                    product_info = "\n".join(pairs)
+                                else:
+                                    raise Exception("No product info found in key-value table.")
+
+                            except Exception as e:
+                                print(f"[Expandable Section Error] {e}")
+
+                                # Fallback 1: Try normal Product Information block
+                                try:
+                                    product_info_element = driver.find_element(By.XPATH, "//div[@id='productDetails_feature_div']")
+                                    raw_info = product_info_element.text.strip()
+                                    lines = raw_info.splitlines()
+                                    filtered_lines = [
+                                        line for line in lines
+                                        if line.strip().lower() not in [
+                                            "product information",
+                                            "feedback",
+                                            "would you like to tell us about a lower price?"
+                                        ]
                                     ]
-                                ]
+                                    if filtered_lines:
+                                        product_info = "\n".join(filtered_lines).strip()
+                                    else:
+                                        raise Exception("Empty product info block.")
 
-                                product_info = "\n".join(filtered_detail_lines).strip()
-                            except:
-                                product_info = "N/A"
+                                except Exception as e:
+                                    print(f"[Fallback 1 Error] {e}")
+
+                                    # Fallback 2: Try detail bullets
+                                    try:
+                                        detail_element = driver.find_element(By.ID, "detailBullets_feature_div")
+                                        raw_detail = detail_element.text.strip()
+                                        detail_lines = raw_detail.splitlines()
+                                        filtered_detail_lines = [
+                                            line for line in detail_lines
+                                            if line.strip().lower() not in [
+                                                "product details",
+                                                "feedback",
+                                                "would you like to tell us about a lower price?"
+                                            ]
+                                        ]
+                                        if filtered_detail_lines:
+                                            product_info = "\n".join(filtered_detail_lines).strip()
+                                    except Exception as e:
+                                        print(f"[Fallback 2 Error] {e}")
+                                        product_info = "N/A"
+
+                        except Exception as e:
+                            print(f"[Main Block Error] {e}")
+                            product_info = "N/A"
+
 
 
 
